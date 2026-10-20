@@ -151,7 +151,7 @@ vim.o.splitbelow = true
 --   and `:help lua-options-guide`
 vim.o.list = true
 vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
-
+vim.opt.guicursor = 'n-v-c-i:block'
 -- Preview substitutions live, as you type!
 vim.o.inccommand = 'split'
 
@@ -346,6 +346,7 @@ require('lazy').setup({
       spec = {
         { '<leader>s', group = '[S]earch' },
         { '<leader>t', group = '[T]oggle' },
+        { '<leader>o', group = '[O]bsidian' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
       },
     },
@@ -881,20 +882,50 @@ require('lazy').setup({
     -- change the command in the config to whatever the name of that colorscheme is.
     --
     -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-    'folke/tokyonight.nvim',
+    'projekt0n/github-nvim-theme',
     priority = 1000, -- Make sure to load this before all the other start plugins.
     config = function()
-      ---@diagnostic disable-next-line: missing-fields
-      require('tokyonight').setup {
-        styles = {
-          comments = { italic = false }, -- Disable italics in comments
-        },
-      }
+      -- Fond transparent : celui de Ghostty (#101216 / #f4f4f4), dans les deux modes
+      require('github-theme').setup { options = { transparent = true } }
 
-      -- Load the colorscheme here.
-      -- Like many other themes, this one has different styles, and you could load
-      -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'tokyonight-night'
+      -- Sobre, comme le reste du poste : barre d'état en texte grisé sans
+      -- fond, ligne du curseur marquée par son seul numéro. Réappliqué à
+      -- chaque colorscheme, que sync_theme recharge en changeant de mode.
+      vim.api.nvim_create_autocmd('ColorScheme', {
+        callback = function()
+          local dim = vim.api.nvim_get_hl(0, { name = 'Comment', link = false }).fg
+          local text = vim.api.nvim_get_hl(0, { name = 'Normal', link = false }).fg
+          for _, group in ipairs {
+            'StatusLine', 'StatusLineNC', 'MiniStatuslineDevinfo', 'MiniStatuslineFilename',
+            'MiniStatuslineFileinfo', 'MiniStatuslineInactive',
+          } do
+            vim.api.nvim_set_hl(0, group, { fg = dim })
+          end
+          for _, mode in ipairs { 'Normal', 'Insert', 'Visual', 'Replace', 'Command', 'Other' } do
+            vim.api.nvim_set_hl(0, 'MiniStatuslineMode' .. mode, { fg = text, bold = true })
+          end
+          vim.api.nvim_set_hl(0, 'CursorLine', {})
+          vim.api.nvim_set_hl(0, 'CursorLineNr', { fg = text, bold = true })
+        end,
+      })
+
+      -- Follow macOS dark/light mode.
+      local function sync_theme()
+        local handle = io.popen 'defaults read -g AppleInterfaceStyle 2>/dev/null'
+        local result = handle and handle:read '*a' or ''
+        if handle then
+          handle:close()
+        end
+        local scheme = result:find 'Dark' and 'github_dark' or 'github_light'
+        if vim.g.colors_name ~= scheme then
+          vim.cmd.colorscheme(scheme)
+        end
+      end
+
+      sync_theme()
+
+      -- Re-sync when nvim regains focus (cheap, catches most toggles).
+      vim.api.nvim_create_autocmd('FocusGained', { callback = sync_theme })
     end,
   },
 
@@ -963,6 +994,17 @@ require('lazy').setup({
     --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
     --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
   },
+  {
+    'github/copilot.vim',
+  },
+  {
+    'CopilotC-Nvim/CopilotChat.nvim',
+    dependencies = {
+      { 'nvim-lua/plenary.nvim', branch = 'master' },
+    },
+    build = 'make tiktoken',
+    opts = {},
+  },
 
   -- The following comments only work if you have downloaded the kickstart repo, not just copy pasted the
   -- init.lua. If you want these files, they are in the repository, so you can just download them and
@@ -984,7 +1026,7 @@ require('lazy').setup({
   --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!
